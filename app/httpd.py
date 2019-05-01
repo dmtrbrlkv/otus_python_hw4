@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--worker", action="store", type=int, default=20)
     parser.add_argument("-r", "--root", action="store", type=str, default="documents")
     parser.add_argument("-l", "--log", action="store", type=str, default=None)
-    parser.add_argument("-p", "--port", action="store", type=int, default=8080)
+    parser.add_argument("-p", "--port", action="store", type=int, default=8081)
     args = parser.parse_args()
 
     logging.basicConfig(filename=args.log, level=logging.INFO,
