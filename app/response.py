@@ -113,7 +113,7 @@ class Response:
 
         path = self.get_content_path()
         if path:
-            if self.cache:
+            if self.method == "GET" and self.cache:
                 content = self.cache.get(path)
                 if content:
                     self.content = content
