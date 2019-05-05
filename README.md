@@ -1,4 +1,4 @@
-# otus_python_hw4
+# OTUServer
 Thread pool architecture
 
 ## ab benchmark
