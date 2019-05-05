@@ -1,4 +1,12 @@
 # otus_python_hw4
+Thread pool architecture
+
+## ab benchmark
+### server 
+```
+python3 httpd.py -p8100 -w 100
+```
+### benchmark
 
 ```
 ab -n 50000 -c 100 -r localhost:8100/
