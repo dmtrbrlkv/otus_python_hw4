@@ -2,38 +2,47 @@ import argparse
 import logging
 import os.path
 
-from threading import Thread
 from queue import Queue
 from socket import AF_INET, SOCK_STREAM, socket
 from const import *
 from response import Response, CacheContent
 from request import Request
+from multiprocessing.dummy import Pool as TreadPool
 
 
-class Worker(Thread):
-    def __init__(self, queue, dir, cache=None):
-        super().__init__()
-        self.queue = queue
-        self.dir = dir
-        self.cache = cache
+class Worker:
+    def __call__(self, socket, dir, cache=None,):
+        try:
+            self.process_connection(socket, dir, cache)
+        except Exception:
+            logging.exception("Processing error:")
+            pass
 
-    def run(self):
+    @classmethod
+    def process_connection(cls, socket, dir, cache=None):
+        data = cls.read_http_data(socket)
+        request = Request(data)
+        response = Response.get_response(request, dir, cache)
+        response_text = response.to_binary()
+        socket.sendall(response_text)
+        socket.close()
+
+    @classmethod
+    def read_http_data(cls, socket):
+        data = ""
         while True:
-            try:
-                args, kwargs = self.queue.get()
-                if len(args) == 1 and isinstance(args[0], type(STOP_TASK)) and args[0] == STOP_TASK:
-                    self.queue.task_done()
-                    break
-                kwargs["dir"] = self.dir
-                kwargs["cache"] = self.cache
-                process_connection(*args, **kwargs)
-                self.queue.task_done()
-            except Exception:
-                logging.exception("Processing error:")
-                pass
+            r = socket.recv(SOCKET_PART_SIZE)
+            data += r.decode("utf8")
+            if len(r) < 1:
+                break
+            if HTTP_END in r:
+                break
+            if len(data) > MAX_REQUEST_SIZE:
+                break
+        return data
 
 
-class ThreadPool():
+class ThreadPool2():
     def __init__(self, n, dir, cache=None):
         self.queue = Queue(n * 2)
         for _ in range(n):
@@ -48,58 +57,36 @@ class ThreadPool():
         self.queue.join()
 
 
-def process_connection(c, a, dir, cache=None):
-    data = read_http_data(c)
-    request = Request(data)
-    response = Response.get_response(request, dir, cache)
-    response_text = response.to_binary()
-    c.sendall(response_text)
-    c.close()
-
-
-def read_http_data(c):
-    data = ""
-    while True:
-        r = c.recv(SOCKET_PART_SIZE)
-        data += r.decode("utf8")
-        if len(r) < 1:
-            break
-        if r.endswith(HTTP_END):
-            break
-        if len(data) > MAX_REQUEST_SIZE:
-            break
-    return data
-
-
 class Server:
-    def __init__(self, n_worker, d_root, port):
-        self.n_worker = n_worker
-        self.d_root = d_root
+    def __init__(self, workers_count, root_directory, port):
+        self.workers_count = workers_count
+        self.root_directory = root_directory
         self.port = port
-        self.tp = None
+        self.tread_pool = None
         self.socket = None
         self.cache = CacheContent()
 
     def run(self):
         dir = os.path.dirname((os.path.abspath(os.path.curdir)))
-        dir = os.path.join(dir, self.d_root)
+        dir = os.path.join(dir, self.root_directory)
         if not os.path.exists(dir):
             raise FileExistsError(f"Path {dir} not found")
 
-        self.tp = ThreadPool(self.n_worker, dir, self.cache)
+        self.tread_pool = TreadPool(self.workers_count)
+
         s = socket(AF_INET, SOCK_STREAM)
 
         self.socket = s
         s.bind(("", self.port))
-        s.listen(self.n_worker * 2)
+        s.listen(self.workers_count * 2)
         logging.info("Server started")
         while True:
             c, a = s.accept()
-            self.tp.add_task(c, a)
+            self.tread_pool.starmap_async(Worker(), [(c, dir, self.cache)])
 
     def stop(self):
-        if self.tp:
-            self.tp.stop()
+        if self.tread_pool:
+            self.tread_pool.terminate()
         if self.socket:
             self.socket.close()
 
