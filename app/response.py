@@ -20,12 +20,12 @@ class CacheContent:
 
 
 class Content:
-    def __init__(self):
-        self.content = None
-        self.content_ext = None
-        self.content_len = None
-        self.content_status = None
-        self.content_info = None
+    def __init__(self, content, ext, len, status, info):
+        self.content = content
+        self.content_ext = ext
+        self.content_len = len
+        self.content_status = status
+        self.content_info = info
 
     def set_content(self, content, ext, len, status, info):
         self.content = content
@@ -33,6 +33,26 @@ class Content:
         self.content_len = len
         self.content_status = status
         self.content_info = info
+
+    @classmethod
+    def not_allowed(cls, method):
+        obj = cls(None, None, None, NOT_ALLOWED, f"Method {method} not allowed")
+        return obj
+
+    @classmethod
+    def forbidden(cls, url):
+        obj = cls(None, None, None, FORBIDDEN, f"Forbidden – you don’t have permission to access {url}")
+        return obj
+
+    @classmethod
+    def not_found(cls, url):
+        obj = cls(None, None, None, NOT_FOUND, f"{url} not found")
+        return obj
+
+    @classmethod
+    def ok(cls, content, path):
+        obj = cls(content, path.split(".")[-1], os.path.getsize(path), OK, "OK")
+        return obj
 
 
 class Response:
@@ -96,54 +116,57 @@ class Response:
             path = os.path.join(self.dir, self.url[1:])
         else:
             path = self.dir
+        path = os.path.normpath(path)
+        if self.dir not in path:
+            return None
         if os.path.isdir(path):
             path = os.path.join(path, INDEX_PATH)
-        if os.path.exists(path):
-            if len(os.path.abspath(path)) < len(os.path.abspath(self.dir)):
-                return None
-            return path
-        else:
+        if not os.path.exists(path):
             return None
+        return path
 
     def load_content(self):
-        if self.method not in self.methods:
-            self.content = Content()
-            self.content.set_content(None, None, None, NOT_ALLOWED, f"Method {self.method} not allowed")
-            return
-
         path = self.get_content_path()
         if path:
-            if self.method == "GET" and self.cache:
-                content = self.cache.get(path)
-                if content:
-                    self.content = content
-                    return
-            try:
-                with open(path, mode="rb") as f:
-                    if self.method == "GET":
-                        content = f.read()
-                        self.content = Content()
-                        self.content.set_content(content, path.split(".")[-1], os.path.getsize(path), OK, "OK")
-                        if self.cache:
-                            self.cache.add(path, self.content)
-                    else:
-                        self.content = Content()
-                        self.content.set_content(None, path.split(".")[-1], os.path.getsize(path), OK, "OK")
-
-            except Exception as e:
-                self.content = Content()
-                self.content.set_content(None, None, None, FORBIDDEN,
-                                         f"Forbidden – you don’t have permission to access {self.url}")
+            self.content = self.get_content_by_path(path)
         else:
-            self.content = Content()
-            self.content.set_content(None, None, None, NOT_FOUND,
-                                     f"{self.url} not found")
+            self.content = self.not_found_processor()
+
+    def get_processor(self, path):
+        if self.cache:
+            content = self.cache.get(path)
+            if content:
+                return content
+
+        with open(path, mode="rb") as f:
+            content = Content.ok(f.read(), path)
+            if self.cache:
+                self.cache.add(path, content)
+            return content
+
+    def head_processor(self, path):
+        content = Content.ok(None, path)
+        return content
+
+    def not_allowed_processor(self):
+        return Content.not_allowed(self.method)
+
+    def not_found_processor(self):
+        return Content.not_found(self.url)
+
+    def get_content_by_path(self, path):
+        try:
+            if self.method == "GET":
+                return self.get_processor(path)
+            if self.method == "HEAD":
+                return self.head_processor(path)
+            return self.not_allowed_processor()
+
+        except Exception:
+            return Content.forbidden(self.url)
 
     def get_content_length(self):
-        if self.content.content_len is None:
-            return 0
-        else:
-            return self.content.content_len
+        return self.content.content_len or 0
 
     def get_content_type(self):
         if self.content.content_ext and self.content.content_ext in self.content_types:
