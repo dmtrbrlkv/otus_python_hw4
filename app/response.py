@@ -4,30 +4,36 @@ import os
 from time import mktime
 from wsgiref.handlers import format_date_time
 from const import *
+from collections import OrderedDict
 
 
 class CacheContent:
-    def __init__(self):
-        self.cache = {}
+    def __init__(self, cache_time=1):
+        self.cache = OrderedDict()
+        self.add_times = []
+        self.cache_time = cache_time
 
     def add(self, key, content):
         self.cache[key] = content
+        self.add_times.append(datetime.datetime.now())
 
     def get(self, key):
         if key in self.cache:
             return self.cache[key]
         return None
 
+    def clear(self):
+        while self.add_times:
+            add_date = self.add_times[0]
+            if add_date + datetime.timedelta(minutes=self.cache_time) > datetime.datetime.now():
+                break
+
+            self.cache.popitem(last=False)
+            self.add_times.pop(0)
+
 
 class Content:
     def __init__(self, content, ext, len, status, info):
-        self.content = content
-        self.content_ext = ext
-        self.content_len = len
-        self.content_status = status
-        self.content_info = info
-
-    def set_content(self, content, ext, len, status, info):
         self.content = content
         self.content_ext = ext
         self.content_len = len
