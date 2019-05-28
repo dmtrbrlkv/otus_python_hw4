@@ -2,12 +2,13 @@ import argparse
 import logging
 import os.path
 
-from queue import Queue
+from time import sleep
 from socket import AF_INET, SOCK_STREAM, socket
 from const import *
 from response import Response, CacheContent
 from request import Request
 from multiprocessing.dummy import Pool as ThreadPool
+
 
 
 class Worker:
@@ -18,9 +19,8 @@ class Worker:
             logging.exception("Processing error:")
             pass
 
-    @staticmethod
-    def process_connection(socket, dir, cache=None):
-        data = Worker.read_http_data(socket)
+    def process_connection(self, socket, dir, cache=None):
+        data = self.read_http_data(socket)
         if not data:
             socket.close()
             return
@@ -30,8 +30,7 @@ class Worker:
         socket.sendall(response_text)
         socket.close()
 
-    @staticmethod
-    def read_http_data(socket):
+    def read_http_data(self, socket):
         data = ""
         while True:
             r = socket.recv(SOCKET_PART_SIZE)
@@ -44,6 +43,12 @@ class Worker:
             if len(data) > MAX_REQUEST_SIZE:
                 break
         return data
+
+
+def clear_cache(cache, run_each_minutes=1):
+    while True:
+        cache.clear()
+        sleep(run_each_minutes * 60)
 
 
 class Server:
@@ -61,7 +66,8 @@ class Server:
         if not os.path.exists(dir):
             raise FileExistsError(f"Path {dir} not found")
 
-        self.thread_pool = ThreadPool(self.workers_count)
+        self.thread_pool = ThreadPool(self.workers_count + 1)
+        self.thread_pool.map_async(clear_cache, [self.cache])
 
         s = socket(AF_INET, SOCK_STREAM)
 
