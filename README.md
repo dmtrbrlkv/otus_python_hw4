@@ -4,7 +4,7 @@ Thread pool architecture
 ## ab benchmark
 ### server 
 ```
-python3 httpd.py -p8100 -w 100
+python3 app/httpd.py -p8100 -w 100
 ```
 ### benchmark
 

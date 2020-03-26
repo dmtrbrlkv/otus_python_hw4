@@ -5,8 +5,9 @@ class Request():
     def __init__(self, raw_data):
         self.raw_data = raw_data
         self.parsed = False
-        self._url = ""
-        self._method = ""
+        # self._url = ""
+        # self._method = ""
+        self.parse_data()
 
     def parse_data(self):
         splited_data = self.raw_data.split()
@@ -24,8 +25,8 @@ class Request():
 
     @property
     def url(self):
-        if not self.parsed:
-            self.parse_data()
+        # if not self.parsed:
+        #     self.parse_data()
 
         return self._url
 
@@ -35,8 +36,8 @@ class Request():
 
     @property
     def method(self):
-        if not self.parsed:
-            self.parse_data()
+        # if not self.parsed:
+        #     self.parse_data()
 
         return self._method
 

@@ -8,7 +8,7 @@ from const import *
 from response import Response, CacheContent
 from request import Request
 from multiprocessing.dummy import Pool as ThreadPool
-
+from multiprocessing import cpu_count
 
 
 class Worker:
@@ -31,10 +31,10 @@ class Worker:
         socket.close()
 
     def read_http_data(self, socket):
-        data = ""
+        data = b""
         while True:
             r = socket.recv(SOCKET_PART_SIZE)
-            data += r.decode("utf8")
+            data += r
             if len(r) < 1:
                 data = None
                 break
@@ -42,7 +42,10 @@ class Worker:
                 break
             if len(data) > MAX_REQUEST_SIZE:
                 break
-        return data
+
+        if data:
+            return data.decode("utf8")
+        return None
 
 
 def clear_cache(cache, run_each_minutes=1):
@@ -61,7 +64,7 @@ class Server:
         self.cache = CacheContent()
 
     def run(self):
-        dir = os.path.dirname((os.path.abspath(os.path.curdir)))
+        dir = (os.path.abspath(os.path.curdir))
         dir = os.path.join(dir, self.root_directory)
         if not os.path.exists(dir):
             raise FileExistsError(f"Path {dir} not found")
@@ -88,7 +91,7 @@ class Server:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-w", "--worker", action="store", type=int, default=20)
+    parser.add_argument("-w", "--worker", action="store", type=int, default=cpu_count())
     parser.add_argument("-r", "--root", action="store", type=str, default="documents")
     parser.add_argument("-l", "--log", action="store", type=str, default=None)
     parser.add_argument("-p", "--port", action="store", type=int, default=8080)
@@ -103,6 +106,6 @@ if __name__ == "__main__":
         server.run()
     except KeyboardInterrupt:
         server.stop()
-        logging.exception("Work interrupted:")
+        logging.info("Work interrupted")
     except Exception as e:
         logging.exception("An error occurred:")
